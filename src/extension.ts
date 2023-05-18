@@ -1,50 +1,54 @@
-'use strict';
+"use strict";
 
-import * as vscode from 'vscode';
+import * as vscode from "vscode";
+import { WebResourceTreeProvider } from "./WebResourceTreeProvider";
+import { DataverseAuthProvider, AUTH_TYPE } from "./AuthProvider";
+import { AuthSessionQuickPickItem } from "./QuickPicks/AuthSessionQuickPickItem";
+import { getDiscoServices, getWebResources } from "./DynamicsDataProvider";
+import { DiscoService, WebResourceMeta } from "./types";
+import { getServiceToken } from "./DynamicsApiAuth";
+import { AccountInfo } from "@azure/msal-node";
 
-import { DepNodeProvider, Dependency } from './nodeDependencies';
-import { JsonOutlineProvider } from './jsonOutline';
-import { FtpExplorer } from './ftpExplorer';
-import { FileExplorer } from './fileExplorer';
-import { TestViewDragAndDrop } from './testViewDragAndDrop';
-import { TestView } from './testView';
+export async function activate(context: vscode.ExtensionContext) {
+  const ap = new DataverseAuthProvider(context);
 
-export function activate(context: vscode.ExtensionContext) {
-	const rootPath = (vscode.workspace.workspaceFolders && (vscode.workspace.workspaceFolders.length > 0))
-		? vscode.workspace.workspaceFolders[0].uri.fsPath : undefined;
+  const session = await vscode.authentication.getSession(AUTH_TYPE, [], {
+    createIfNone: true,
+  });
 
-	// Samples of `window.registerTreeDataProvider`
-	const nodeDependenciesProvider = new DepNodeProvider(rootPath);
-	vscode.window.registerTreeDataProvider('nodeDependencies', nodeDependenciesProvider);
-	vscode.commands.registerCommand('nodeDependencies.refreshEntry', () => nodeDependenciesProvider.refresh());
-	vscode.commands.registerCommand('extension.openPackageOnNpm', moduleName => vscode.commands.executeCommand('vscode.open', vscode.Uri.parse(`https://www.npmjs.com/package/${moduleName}`)));
-	vscode.commands.registerCommand('nodeDependencies.addEntry', () => vscode.window.showInformationMessage(`Successfully called add entry.`));
-	vscode.commands.registerCommand('nodeDependencies.editEntry', (node: Dependency) => vscode.window.showInformationMessage(`Successfully called edit entry on ${node.label}.`));
-	vscode.commands.registerCommand('nodeDependencies.deleteEntry', (node: Dependency) => vscode.window.showInformationMessage(`Successfully called delete entry on ${node.label}.`));
+  /*const pick = await vscode.window.showQuickPick([session].map(p => new AuthSessionQuickPickItem(session.id, session.account.label)), {
+    title: "Select your login",
+    canPickMany: false,
+    // any other properties you need
+  });*/
 
-	const jsonOutlineProvider = new JsonOutlineProvider(context);
-	vscode.window.registerTreeDataProvider('jsonOutline', jsonOutlineProvider);
-	vscode.commands.registerCommand('jsonOutline.refresh', () => jsonOutlineProvider.refresh());
-	vscode.commands.registerCommand('jsonOutline.refreshNode', offset => jsonOutlineProvider.refresh(offset));
-	vscode.commands.registerCommand('jsonOutline.renameNode', args => {
-		let offset = undefined;
-		if (args.selectedTreeItems && args.selectedTreeItems.length) {
-			offset = args.selectedTreeItems[0];
-		} else if (typeof args === 'number') {
-			offset = args;
-		}
-		if (offset) {
-			jsonOutlineProvider.rename(offset);
-		}
-	});
-	vscode.commands.registerCommand('extension.openJsonSelection', range => jsonOutlineProvider.select(range));
+  const services = await getDiscoServices(session.accessToken);
 
-	// Samples of `window.createView`
-	new FtpExplorer(context);
-	new FileExplorer(context);
+  const pick = await vscode.window.showQuickPick(
+    services.map(
+      (p) => new AuthSessionQuickPickItem(p.ApiUrl, p.FriendlyName, p)
+    ),
+    {
+      title: "Select your environment",
+      canPickMany: false,
+      // any other properties you need
+    }
+  );
 
-	// Test View
-	new TestView(context);
+  if (pick) {
+    const service = pick.item as DiscoService;
+    const token = await getServiceToken(
+      service,
+      session.account as any as AccountInfo
+    );
+    const webResources = (await getWebResources(
+      token?.accessToken || "",
+      service.ApiUrl
+    )) as WebResourceMeta[];
 
-	new TestViewDragAndDrop(context);
+    vscode.window.registerTreeDataProvider(
+      "nodeDependencies",
+      new WebResourceTreeProvider(webResources)
+    );
+  }
 }
