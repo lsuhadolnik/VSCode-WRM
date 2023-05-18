@@ -1,3 +1,5 @@
+import { FileStat, FileType } from "vscode";
+
 /* eslint-disable @typescript-eslint/naming-convention */
 export interface DiscoService {
   ApiUrl: string;
@@ -5,30 +7,30 @@ export interface DiscoService {
 }
 
 export interface WebResourceMeta {
-    /**
-     * The name as displayed in UI
-     */
-    displayname: string;
-    
-    /**
-     * Base64 content of the webresource
-     */
-    content: string;
+  /**
+   * The name as displayed in UI
+   */
+  displayname: string;
 
-    /**
-     * Type of Webresource
-     */
-    webresourcetype: WebresourceType;
+  /**
+   * Base64 content of the webresource
+   */
+  content: string;
 
-    /**
-     * The path
-     */
-    name: string;
+  /**
+   * Type of Webresource
+   */
+  webresourcetype: WebresourceType;
 
-    /**
-     * The ID
-     */
-    webresourceid: string;
+  /**
+   * The path
+   */
+  name: string;
+
+  /**
+   * The ID
+   */
+  webresourceid: string;
 }
 
 /**
@@ -47,4 +49,12 @@ export enum WebresourceType {
   ICO = 10,
   SVG = 11,
   RESX = 12,
+}
+
+export interface FindFileResult {
+  name: string;
+  meta?: WebResourceMeta;
+  children?: [string, FileType][];
+  type: FileType;
+  stat: FileStat;
 }
