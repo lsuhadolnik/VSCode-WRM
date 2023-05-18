@@ -46,7 +46,8 @@ async function odataFetch(
   org: string,
   link: string,
   method?: string,
-  body?: string
+  body?: string,
+  headers?: boolean
 ) {
   const serviceToken = await getServiceToken(org);
 
@@ -65,6 +66,10 @@ async function odataFetch(
   const req = await fetch(link, config);
 
   if (req.ok) {
+    if (headers) {
+      return Object.fromEntries(Array.from(req.headers.entries()));
+    }
+
     try {
       const json = await req.json();
       return json;
@@ -98,15 +103,32 @@ export async function createWebResource(
   content: string,
   type: WebresourceType
 ) {
-  return odataFetch(
-    org,
-    `https://${org}/api/data/v9.2/webresourceset`,
-    "POST",
-    JSON.stringify({
-      content: Buffer.from(content).toString("base64"),
-      name,
-      webresourcetype: type,
-    })
+  await window.withProgress(
+    {
+      location: ProgressLocation.Window,
+      cancellable: false,
+      title: "Creating and Publishing...",
+    },
+    async (progress) => {
+      progress.report({ increment: 0 });
+
+      const headers = await odataFetch(
+        org,
+        `https://${org}/api/data/v9.2/webresourceset`,
+        "POST",
+        JSON.stringify({
+          content: Buffer.from(content).toString("base64"),
+          name,
+          webresourcetype: type,
+        }),
+        true
+      );
+
+      progress.report({ increment: 50 });
+      await publishWebResource(org, "");
+
+      progress.report({ increment: 100 });
+    }
   );
 }
 
