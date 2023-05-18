@@ -1,14 +1,20 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { FindFileResult, WebResourceMeta } from "./types";
+import { FindFileResult, WebResourceMeta, WebresourceType } from "./types";
 import {
   flatTree,
   getDatavserseUrlFromUri,
   getWebResourceNameFromUri,
 } from "./util/dataverseFsUtil";
-import { getWebResources, getWebresourceContent } from "./DynamicsDataProvider";
-import { TextEncoder } from "util";
+import {
+  createWebResource,
+  getWebResources,
+  getWebresourceContent,
+  updateWebResource,
+} from "./DynamicsDataProvider";
+import { TextDecoder, TextEncoder } from "util";
 import { buildTree, findItemInTree } from "./util/buildTree";
+import { BasicQuickPickItem } from "./QuickPicks/BasicQuickPickItem";
 
 export class File implements vscode.FileStat {
   type: vscode.FileType;
@@ -118,7 +124,9 @@ export class DynamicsWebresourceFilesystemProvider
 
       if (content) {
         return Uint8Array.from(
-          Buffer.from((content as any).content, "base64").toString("utf-8"),
+          Buffer.from((content as any).content || "", "base64").toString(
+            "utf-8"
+          ),
           (c) => c.charCodeAt(0)
         );
       }
@@ -181,6 +189,7 @@ export class DynamicsWebresourceFilesystemProvider
     await this.init(uri);
 
     const org = getDatavserseUrlFromUri(uri);
+    const filename = getWebResourceNameFromUri(uri);
 
     const item = this.find(uri);
 
@@ -196,10 +205,36 @@ export class DynamicsWebresourceFilesystemProvider
     if (!item) {
       // CREATE FILE
 
+      const type = await vscode.window.showQuickPick(
+        [
+          new BasicQuickPickItem("CSS", WebresourceType.CSS),
+          new BasicQuickPickItem("JS", WebresourceType.JavaScript),
+          new BasicQuickPickItem("HTML", WebresourceType.HTML),
+          new BasicQuickPickItem("PNG", WebresourceType.PNG),
+          new BasicQuickPickItem("SVG", WebresourceType.SVG),
+        ],
+        { title: "Select WebResource type", ignoreFocusOut: false }
+      );
+      if (!type) {
+        throw Error("Please select a type");
+      }
+
+      await createWebResource(
+        org,
+        filename,
+        new TextDecoder().decode(content),
+        type.id
+      );
+
       this._fireSoon({ type: vscode.FileChangeType.Created, uri });
     } else {
       // UPDATE FILE
 
+      await updateWebResource(
+        org,
+        item.meta?.webresourceid || "",
+        new TextDecoder().decode(content)
+      );
       this._fireSoon({ type: vscode.FileChangeType.Changed, uri });
     }
   }
@@ -213,7 +248,7 @@ export class DynamicsWebresourceFilesystemProvider
   ): Promise<void> {
     await this.init(oldUri);
 
-    if (!options.overwrite && this._lookup(newUri, true)) {
+    /*if (!options.overwrite && this._lookup(newUri, true)) {
       throw vscode.FileSystemError.FileExists(newUri);
     }
 
@@ -230,13 +265,15 @@ export class DynamicsWebresourceFilesystemProvider
     this._fireSoon(
       { type: vscode.FileChangeType.Deleted, uri: oldUri },
       { type: vscode.FileChangeType.Created, uri: newUri }
-    );
+    );*/
+
+    throw new Error("NOT IMPLEMENTED");
   }
 
   async delete(uri: vscode.Uri): Promise<void> {
     await this.init(uri);
 
-    const dirname = uri.with({ path: path.posix.dirname(uri.path) });
+    /*const dirname = uri.with({ path: path.posix.dirname(uri.path) });
     const basename = path.posix.basename(uri.path);
     const parent = this._lookupAsDirectory(dirname, false);
     if (!parent.entries.has(basename)) {
@@ -248,12 +285,14 @@ export class DynamicsWebresourceFilesystemProvider
     this._fireSoon(
       { type: vscode.FileChangeType.Changed, uri: dirname },
       { uri, type: vscode.FileChangeType.Deleted }
-    );
+    );*/
+
+    throw new Error("NOT IMPLEMENTED");
   }
 
   async createDirectory(uri: vscode.Uri): Promise<void> {
     await this.init(uri);
-    const basename = path.posix.basename(uri.path);
+    /*const basename = path.posix.basename(uri.path);
     const dirname = uri.with({ path: path.posix.dirname(uri.path) });
     const parent = this._lookupAsDirectory(dirname, false);
 
@@ -264,7 +303,8 @@ export class DynamicsWebresourceFilesystemProvider
     this._fireSoon(
       { type: vscode.FileChangeType.Changed, uri: dirname },
       { type: vscode.FileChangeType.Created, uri }
-    );
+    );*/
+    throw new Error("NOT IMPLEMENTED");
   }
 
   private _emitter = new vscode.EventEmitter<vscode.FileChangeEvent[]>();

@@ -4,8 +4,9 @@ const discoUrl = `${cloudUrl}/api/discovery/v2.0/Instances?$select=ApiUrl,Friend
 import fetch, { RequestInit } from "node-fetch";
 import { getServiceToken } from "./DynamicsApiAuth";
 import { getDatavserseUrlFromUri } from "./util/dataverseFsUtil";
-import { WebResourceMeta } from "./types";
-import { window } from "vscode";
+import { WebResourceMeta, WebresourceType } from "./types";
+import { ProgressLocation, window } from "vscode";
+import { BasicQuickPickItem } from "./QuickPicks/BasicQuickPickItem";
 
 export async function getDiscoServices(
   token: string
@@ -27,8 +28,8 @@ export async function getDiscoServices(
 }
 
 export async function getWebResources(org: string) {
-  const url = `https://${org}/api/data/v9.2/webresourceset?$select=name`;
-  return (await odataAll(url)) as WebResourceMeta[];
+  const url = `https://${org}/api/data/v9.2/webresourceset?$select=name,webresourcetype,createdon,modifiedon`;
+  return (await odataAll(org, url)) as WebResourceMeta[];
 }
 
 export async function getWebresourceContent(
@@ -64,9 +65,12 @@ async function odataFetch(
   const req = await fetch(link, config);
 
   if (req.ok) {
-    const json = await req.json();
-
-    return json;
+    try {
+      const json = await req.json();
+      return json;
+    } catch (e) {
+      return [];
+    }
   } else {
     const text = await req.text();
     debugger;
@@ -91,28 +95,65 @@ async function odataAll(org: string, link: string) {
 export async function createWebResource(
   org: string,
   name: string,
-  content: string
+  content: string,
+  type: WebresourceType
 ) {
+  return odataFetch(
+    org,
+    `https://${org}/api/data/v9.2/webresourceset`,
+    "POST",
+    JSON.stringify({
+      content: Buffer.from(content).toString("base64"),
+      name,
+      webresourcetype: type,
+    })
+  );
+}
 
-    const type = await window.showQuickPick([
-        new 
-    ])
+function getPublishXml(webResourceId: string) {
+  return `<importexportxml><webresources><webresource>{${webResourceId.toUpperCase()}}</webresource></webresources></importexportxml>`;
+}
 
-    return odataFetch(
-        org, 
-        `https://${org}/api/data/v9.2/webresourceset`,
-        'POST',
-        JSON.stringify({
-            content: Buffer.from(content).toString('base64'),
-            name: 
-    }));
+async function publishWebResource(org: string, webResourceId: string) {
+  return odataFetch(
+    org,
+    `https://${org}/api/data/v9.2/PublishXml`,
+    "POST",
+    JSON.stringify({
+      ParameterXml: getPublishXml(webResourceId),
+    })
+  );
 }
 
 export async function updateWebResource(
   org: string,
   webresourceId: string,
   content: string
-) {}
+) {
+  window.withProgress(
+    {
+      location: ProgressLocation.Window,
+      cancellable: false,
+      title: "Updating and Publishing...",
+    },
+    async (progress) => {
+      progress.report({ increment: 0 });
+
+      await odataFetch(
+        org,
+        `https://${org}/api/data/v9.2/webresourceset(${webresourceId})`,
+        "PATCH",
+        JSON.stringify({
+          content: Buffer.from(content).toString("base64"),
+        })
+      );
+
+      await publishWebResource(org, webresourceId);
+
+      progress.report({ increment: 100 });
+    }
+  );
+}
 
 export async function renameWebResource(
   org: string,
