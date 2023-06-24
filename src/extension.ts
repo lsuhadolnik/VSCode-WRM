@@ -1,14 +1,9 @@
 "use strict";
 
 import * as vscode from "vscode";
-import { WebResourceTreeProvider } from "./WebResourceTreeProvider";
-import { DataverseAuthProvider, AUTH_TYPE } from "./AuthProvider";
-import { AuthSessionQuickPickItem } from "./QuickPicks/AuthSessionQuickPickItem";
-import { getDiscoServices, getWebResources } from "./DynamicsDataProvider";
-import { DiscoService, WebResourceMeta } from "./types";
-import { AccountInfo } from "@azure/msal-node";
+import { DataverseAuthProvider } from "./AuthProvider";
 import connectToDataverse from "./Commands/ConnectToDataverse";
-import { DynamicsWebresourceFilesystemProvider } from "./DataverseFilesystemProvider";
+import { DynamicsWebresourceFilesystemProvider } from "./FileSystem/DataverseFilesystemProvider";
 import { PROTO_NAME } from "./consts";
 
 let authProvider: DataverseAuthProvider | null = null;

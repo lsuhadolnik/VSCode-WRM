@@ -1,20 +1,21 @@
 import * as path from "path";
 import * as vscode from "vscode";
-import { FindFileResult, WebResourceMeta, WebresourceType } from "./types";
+import { FindFileResult, WebResourceMeta, WebresourceType } from "../types";
 import {
   flatTree,
   getDatavserseUrlFromUri,
   getWebResourceNameFromUri,
-} from "./util/dataverseFsUtil";
+  placeTreeItem,
+} from "./DataverseFsUtil";
 import {
   createWebResource,
   getWebResources,
   getWebresourceContent,
   updateWebResource,
-} from "./DynamicsDataProvider";
+} from "../Dynamics/DynamicsDataProvider";
 import { TextDecoder, TextEncoder } from "util";
-import { buildTree, findItemInTree } from "./util/buildTree";
-import { BasicQuickPickItem } from "./QuickPicks/BasicQuickPickItem";
+import { buildTree, findItemInTree } from "./BuildTree";
+import { BasicQuickPickItem } from "../QuickPicks/BasicQuickPickItem";
 
 export class File implements vscode.FileStat {
   type: vscode.FileType;
@@ -62,19 +63,15 @@ export class DynamicsWebresourceFilesystemProvider
     console.log("INITIALISING - Filesystem");
   }
 
-  private webresources: { [org: string]: WebResourceMeta[] } = {};
+  private webresources: WebResourceMeta[] = [];
   private tree = null as any;
 
   public async init(uri: vscode.Uri) {
     const organisation = getDatavserseUrlFromUri(uri);
-    if (this.webresources[organisation]) {
+    if (this.webresources.length > 0) {
       return true;
     } else {
-      this.webresources[organisation] = await this.loadWebResources(
-        organisation
-      );
-
-      this.tree = buildTree(this.webresources[organisation]);
+      this.webresources = await this.loadWebResources(organisation);
     }
   }
 
@@ -86,6 +83,11 @@ export class DynamicsWebresourceFilesystemProvider
 
   // --- manage file metadata
 
+  /**
+   * Works already
+   * @param uri
+   * @returns
+   */
   async stat(uri: vscode.Uri): Promise<vscode.FileStat> {
     await this.init(uri);
 
@@ -97,6 +99,11 @@ export class DynamicsWebresourceFilesystemProvider
     throw vscode.FileSystemError.FileNotFound();
   }
 
+  /**
+   *  Works already
+   * @param uri
+   * @returns
+   */
   async readDirectory(uri: vscode.Uri): Promise<[string, vscode.FileType][]> {
     await this.init(uri);
 
@@ -109,7 +116,11 @@ export class DynamicsWebresourceFilesystemProvider
   }
 
   // --- manage file contents
-
+  /**
+   * Works already
+   * @param uri
+   * @returns
+   */
   async readFile(uri: vscode.Uri): Promise<Uint8Array> {
     await this.init(uri);
 
@@ -202,6 +213,9 @@ export class DynamicsWebresourceFilesystemProvider
     if (item && options.create && !options.overwrite) {
       throw vscode.FileSystemError.FileExists(uri);
     }
+
+    const stringContent = new TextDecoder().decode(content);
+
     if (!item) {
       // CREATE FILE
 
@@ -219,12 +233,17 @@ export class DynamicsWebresourceFilesystemProvider
         throw Error("Please select a type");
       }
 
-      await createWebResource(
-        org,
-        filename,
-        new TextDecoder().decode(content),
-        type.id
-      );
+      let newId = "";
+      if (stringContent !== "") {
+        newId = await createWebResource(org, filename, stringContent, type.id);
+      }
+
+      /*placeTreeItem(this.tree, {
+        webresourcetype: type.id,
+        displayname: filename,
+        name: filename,
+        webresourceid: newId,
+      } as WebResourceMeta);*/
 
       this._fireSoon({ type: vscode.FileChangeType.Created, uri });
     } else {

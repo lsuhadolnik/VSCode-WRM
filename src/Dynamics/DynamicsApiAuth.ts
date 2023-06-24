@@ -1,6 +1,6 @@
 import { AccountInfo } from "@azure/msal-node";
-import { AUTH_TYPE, msalClient } from "./AuthProvider";
-import { DiscoService } from "./types";
+import { AUTH_TYPE, msalClient } from "../AuthProvider";
+import { DiscoService } from "../types";
 import { authentication, window } from "vscode";
 import open from "open";
 
@@ -26,8 +26,18 @@ export async function getServiceToken(org: string) {
         async openBrowser(url) {
           open(url);
         },
-        successTemplate:
-          "<h1>Successfully signed in!</h1> <p>You can close this window now.</p>",
+        successTemplate: `<html>
+<head>
+        <style>
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+        }
+        </style>
+</head>
+<body>
+<h1>Successfully signed in!</h1> <p>You can close this window now.</p>
+</body>
+</html>`,
         errorTemplate:
           "<h1>Oops! Something went wrong</h1> <p>Check the console for more information.</p>",
       });

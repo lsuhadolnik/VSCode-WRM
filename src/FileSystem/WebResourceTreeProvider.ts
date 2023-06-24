@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { WebResourceMeta } from "./types";
+import { WebResourceMeta } from "../types";
 
 export class WebResourceTreeProvider
   implements vscode.TreeDataProvider<WebResourceItem>

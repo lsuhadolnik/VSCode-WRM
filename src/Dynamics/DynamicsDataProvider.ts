@@ -3,10 +3,10 @@ const cloudUrl = "https://globaldisco.crm.dynamics.com";
 const discoUrl = `${cloudUrl}/api/discovery/v2.0/Instances?$select=ApiUrl,FriendlyName`;
 import fetch, { RequestInit } from "node-fetch";
 import { getServiceToken } from "./DynamicsApiAuth";
-import { getDatavserseUrlFromUri } from "./util/dataverseFsUtil";
-import { WebResourceMeta, WebresourceType } from "./types";
+import { getDatavserseUrlFromUri } from "../FileSystem/DataverseFsUtil";
+import { WebResourceMeta, WebresourceType } from "../types";
 import { ProgressLocation, window } from "vscode";
-import { BasicQuickPickItem } from "./QuickPicks/BasicQuickPickItem";
+import { BasicQuickPickItem } from "../QuickPicks/BasicQuickPickItem";
 
 export async function getDiscoServices(
   token: string
@@ -102,8 +102,8 @@ export async function createWebResource(
   name: string,
   content: string,
   type: WebresourceType
-) {
-  await window.withProgress(
+): Promise<string> {
+  return await window.withProgress<string>(
     {
       location: ProgressLocation.Window,
       cancellable: false,
@@ -124,10 +124,16 @@ export async function createWebResource(
         true
       );
 
+      const id = "";
+
+      debugger;
+
       progress.report({ increment: 50 });
-      await publishWebResource(org, "");
+      await publishWebResource(org, id);
 
       progress.report({ increment: 100 });
+
+      return id;
     }
   );
 }

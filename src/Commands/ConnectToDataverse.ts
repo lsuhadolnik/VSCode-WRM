@@ -1,6 +1,6 @@
 import { window, authentication, workspace, commands, Uri } from "vscode";
 import { AUTH_TYPE, DataverseAuthProvider } from "../AuthProvider";
-import { getDiscoServices } from "../DynamicsDataProvider";
+import { getDiscoServices } from "../Dynamics/DynamicsDataProvider";
 import { AuthSessionQuickPickItem } from "../QuickPicks/AuthSessionQuickPickItem";
 import { DiscoService } from "../types";
 import { PROTO_NAME } from "../consts";
@@ -35,7 +35,6 @@ export default async function connectToDataverse() {
     const service = pick.item as DiscoService;
     const origin = Uri.parse(service.ApiUrl).authority;
     const url = Uri.parse(`${PROTO_NAME}:///${origin}`);
-    debugger;
     commands.executeCommand("vscode.openFolder", url);
   }
 }

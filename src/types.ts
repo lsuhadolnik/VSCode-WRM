@@ -15,7 +15,7 @@ export interface WebResourceMeta {
   /**
    * Base64 content of the webresource
    */
-  content: string;
+  content?: string;
 
   /**
    * Type of Webresource
