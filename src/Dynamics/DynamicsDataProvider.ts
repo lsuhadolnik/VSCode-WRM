@@ -2,191 +2,192 @@
 const cloudUrl = "https://globaldisco.crm.dynamics.com";
 const discoUrl = `${cloudUrl}/api/discovery/v2.0/Instances?$select=ApiUrl,FriendlyName`;
 import fetch, { RequestInit } from "node-fetch";
-import { getServiceToken } from "./DynamicsApiAuth";
-import { getDatavserseUrlFromUri } from "../FileSystem/DataverseFsUtil";
 import { WebResourceMeta, WebresourceType } from "../types";
 import { ProgressLocation, window } from "vscode";
-import { BasicQuickPickItem } from "../QuickPicks/BasicQuickPickItem";
+import { Inject, Service } from "typedi";
+import { DataverseAuthProvider } from "../Auth/DiscoveryServiceAuthProvider";
 
-export async function getDiscoServices(
-  token: string
-): Promise<{ ApiUrl: string; FriendlyName: string }[]> {
-  const req = await fetch(discoUrl, {
-    method: "GET",
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
+@Service()
+export class DynamicsDataProvider {
+  @Inject()
+  private _authProvider!: DataverseAuthProvider;
 
-  const resp: any = await req.json();
-  console.log(resp);
-  if (req.ok) {
-    return resp.value;
-  } else {
-    throw new Error(resp);
-  }
-}
+  public async getDiscoServices(): Promise<
+    { ApiUrl: string; FriendlyName: string }[]
+  > {
+    const req = await fetch(discoUrl, {
+      method: "GET",
+      headers: {
+        Authorization: await this._authProvider.getDiscoveryAuthHeader(),
+      },
+    });
 
-export async function getWebResources(org: string) {
-  const url = `https://${org}/api/data/v9.2/webresourceset?$select=name,webresourcetype,createdon,modifiedon`;
-  return (await odataAll(org, url)) as WebResourceMeta[];
-}
-
-export async function getWebresourceContent(
-  org: string,
-  webResourceId: string
-) {
-  return await odataFetch(
-    org,
-    `https://${org}/api/data/v9.2/webresourceset(${webResourceId})?$select=content,name`
-  );
-}
-
-async function odataFetch(
-  org: string,
-  link: string,
-  method?: string,
-  body?: string,
-  headers?: boolean
-) {
-  const serviceToken = await getServiceToken(org);
-
-  const config = {
-    method: method || "GET",
-    headers: {
-      Authorization: `Bearer ${serviceToken?.accessToken}`,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-  } as RequestInit;
-  if (body) {
-    config.body = body;
+    const resp: any = await req.json();
+    console.log(resp);
+    if (req.ok) {
+      return resp.value;
+    } else {
+      throw new Error(resp);
+    }
   }
 
-  const req = await fetch(link, config);
+  public async getWebResources(org: string) {
+    const url = `https://${org}/api/data/v9.2/webresourceset?$select=name,webresourcetype,createdon,modifiedon`;
+    return (await this.odataAll(org, url)) as WebResourceMeta[];
+  }
 
-  if (req.ok) {
-    if (headers) {
-      return Object.fromEntries(Array.from(req.headers.entries()));
+  public async getWebresourceContent(org: string, webResourceId: string) {
+    return await this.odataFetch(
+      org,
+      `https://${org}/api/data/v9.2/webresourceset(${webResourceId})?$select=content,name`
+    );
+  }
+
+  private async odataFetch(
+    org: string,
+    link: string,
+    method?: string,
+    body?: string,
+    headers?: boolean
+  ) {
+    const Authorization = await this._authProvider.getDataverseAuthHeader(org);
+    const config = {
+      method: method || "GET",
+      headers: {
+        Authorization,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    } as RequestInit;
+    if (body) {
+      config.body = body;
     }
 
-    try {
-      const json = await req.json();
-      return json;
-    } catch (e) {
-      return [];
-    }
-  } else {
-    const text = await req.text();
-    debugger;
+    const req = await fetch(link, config);
 
-    return [];
-  }
-}
+    if (req.ok) {
+      if (headers) {
+        return Object.fromEntries(Array.from(req.headers.entries()));
+      }
 
-async function odataAll(org: string, link: string) {
-  const records = [];
-  let currentLink = link;
-  while (currentLink) {
-    let currentSet = (await odataFetch(org, currentLink)) as any;
-    currentLink = currentSet["@odata.nextLink"];
-
-    records.push(...currentSet.value);
-  }
-
-  return records;
-}
-
-export async function createWebResource(
-  org: string,
-  name: string,
-  content: string,
-  type: WebresourceType
-): Promise<string> {
-  return await window.withProgress<string>(
-    {
-      location: ProgressLocation.Window,
-      cancellable: false,
-      title: "Creating and Publishing...",
-    },
-    async (progress) => {
-      progress.report({ increment: 0 });
-
-      const headers = await odataFetch(
-        org,
-        `https://${org}/api/data/v9.2/webresourceset`,
-        "POST",
-        JSON.stringify({
-          content: Buffer.from(content).toString("base64"),
-          name,
-          webresourcetype: type,
-        }),
-        true
-      );
-
-      const id = "";
-
+      try {
+        const json = await req.json();
+        return json;
+      } catch (e) {
+        return [];
+      }
+    } else {
+      const text = await req.text();
       debugger;
 
-      progress.report({ increment: 50 });
-      await publishWebResource(org, id);
-
-      progress.report({ increment: 100 });
-
-      return id;
+      return [];
     }
-  );
-}
+  }
 
-function getPublishXml(webResourceId: string) {
-  return `<importexportxml><webresources><webresource>{${webResourceId.toUpperCase()}}</webresource></webresources></importexportxml>`;
-}
+  private async odataAll(org: string, link: string) {
+    const records = [];
+    let currentLink = link;
+    while (currentLink) {
+      let currentSet = (await this.odataFetch(org, currentLink)) as any;
+      currentLink = currentSet["@odata.nextLink"];
 
-async function publishWebResource(org: string, webResourceId: string) {
-  return odataFetch(
-    org,
-    `https://${org}/api/data/v9.2/PublishXml`,
-    "POST",
-    JSON.stringify({
-      ParameterXml: getPublishXml(webResourceId),
-    })
-  );
-}
-
-export async function updateWebResource(
-  org: string,
-  webresourceId: string,
-  content: string
-) {
-  window.withProgress(
-    {
-      location: ProgressLocation.Window,
-      cancellable: false,
-      title: "Updating and Publishing...",
-    },
-    async (progress) => {
-      progress.report({ increment: 0 });
-
-      await odataFetch(
-        org,
-        `https://${org}/api/data/v9.2/webresourceset(${webresourceId})`,
-        "PATCH",
-        JSON.stringify({
-          content: Buffer.from(content).toString("base64"),
-        })
-      );
-
-      await publishWebResource(org, webresourceId);
-
-      progress.report({ increment: 100 });
+      records.push(...currentSet.value);
     }
-  );
+
+    return records;
+  }
+
+  public async createWebResource(
+    org: string,
+    name: string,
+    content: string,
+    type: WebresourceType
+  ): Promise<string> {
+    return await window.withProgress<string>(
+      {
+        location: ProgressLocation.Window,
+        cancellable: false,
+        title: "Creating and Publishing...",
+      },
+      async (progress) => {
+        progress.report({ increment: 0 });
+
+        const headers = await this.odataFetch(
+          org,
+          `https://${org}/api/data/v9.2/webresourceset`,
+          "POST",
+          JSON.stringify({
+            content: Buffer.from(content).toString("base64"),
+            name,
+            webresourcetype: type,
+          }),
+          true
+        );
+
+        const id = "";
+
+        debugger;
+
+        progress.report({ increment: 50 });
+        await this.publishWebResource(org, id);
+
+        progress.report({ increment: 100 });
+
+        return id;
+      }
+    );
+  }
+
+  private getPublishXml(webResourceId: string) {
+    return `<importexportxml><webresources><webresource>{${webResourceId.toUpperCase()}}</webresource></webresources></importexportxml>`;
+  }
+
+  private async publishWebResource(org: string, webResourceId: string) {
+    return this.odataFetch(
+      org,
+      `https://${org}/api/data/v9.2/PublishXml`,
+      "POST",
+      JSON.stringify({
+        ParameterXml: this.getPublishXml(webResourceId),
+      })
+    );
+  }
+
+  public async updateWebResource(
+    org: string,
+    webresourceId: string,
+    content: string
+  ) {
+    window.withProgress(
+      {
+        location: ProgressLocation.Window,
+        cancellable: false,
+        title: "Updating and Publishing...",
+      },
+      async (progress) => {
+        progress.report({ increment: 0 });
+
+        await this.odataFetch(
+          org,
+          `https://${org}/api/data/v9.2/webresourceset(${webresourceId})`,
+          "PATCH",
+          JSON.stringify({
+            content: Buffer.from(content).toString("base64"),
+          })
+        );
+
+        await this.publishWebResource(org, webresourceId);
+
+        progress.report({ increment: 100 });
+      }
+    );
+  }
+
+  public async renameWebResource(
+    org: string,
+    webresourceId: string,
+    newName: string
+  ) {}
+
+  public async deleteWebResource(org: string, webresourceId: string) {}
 }
-
-export async function renameWebResource(
-  org: string,
-  webresourceId: string,
-  newName: string
-) {}
-
-export async function deleteWebResource(org: string, webresourceId: string) {}

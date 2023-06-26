@@ -1,3 +1,5 @@
+import "reflect-metadata";
+
 import * as path from "path";
 import * as vscode from "vscode";
 import { FindFileResult, WebResourceMeta, WebresourceType } from "../types";
@@ -7,15 +9,12 @@ import {
   getWebResourceNameFromUri,
   placeTreeItem,
 } from "./DataverseFsUtil";
-import {
-  createWebResource,
-  getWebResources,
-  getWebresourceContent,
-  updateWebResource,
-} from "../Dynamics/DynamicsDataProvider";
 import { TextDecoder, TextEncoder } from "util";
 import { buildTree, findItemInTree } from "./BuildTree";
 import { BasicQuickPickItem } from "../QuickPicks/BasicQuickPickItem";
+import { DataverseAuthProvider } from "../Auth/DiscoveryServiceAuthProvider";
+import Container, { Inject, Service } from "typedi";
+import { DynamicsDataProvider } from "../Dynamics/DynamicsDataProvider";
 
 export class File implements vscode.FileStat {
   type: vscode.FileType;
@@ -59,10 +58,6 @@ export type Entry = File | Directory;
 export class DynamicsWebresourceFilesystemProvider
   implements vscode.FileSystemProvider
 {
-  constructor() {
-    console.log("INITIALISING - Filesystem");
-  }
-
   private webresources: WebResourceMeta[] = [];
   private tree = null as any;
 
@@ -76,7 +71,7 @@ export class DynamicsWebresourceFilesystemProvider
   }
 
   private loadWebResources(org: string) {
-    return getWebResources(org);
+    return Container.get(DynamicsDataProvider).getWebResources(org);
   }
 
   root = new Directory("");
@@ -128,10 +123,9 @@ export class DynamicsWebresourceFilesystemProvider
 
     const item = this.find(uri);
     if (item) {
-      const content = await getWebresourceContent(
-        org,
-        item.meta?.webresourceid || ""
-      );
+      const content = await Container.get(
+        DynamicsDataProvider
+      ).getWebresourceContent(org, item.meta?.webresourceid || "");
 
       if (content) {
         return Uint8Array.from(
@@ -166,11 +160,9 @@ export class DynamicsWebresourceFilesystemProvider
       };
     }
 
-    const folder = this.webresources[org].filter((w) =>
-      w.name.startsWith(filename)
-    );
+    const folder = this.webresources.filter((w) => w.name.startsWith(filename));
 
-    const meta = this.webresources[org].find((f) => f.name === filename);
+    const meta = this.webresources.find((f) => f.name === filename);
     if (folder.length > 0) {
       if (meta) {
         return {
@@ -235,7 +227,12 @@ export class DynamicsWebresourceFilesystemProvider
 
       let newId = "";
       if (stringContent !== "") {
-        newId = await createWebResource(org, filename, stringContent, type.id);
+        newId = await Container.get(DynamicsDataProvider).createWebResource(
+          org,
+          filename,
+          stringContent,
+          type.id
+        );
       }
 
       /*placeTreeItem(this.tree, {
@@ -249,7 +246,7 @@ export class DynamicsWebresourceFilesystemProvider
     } else {
       // UPDATE FILE
 
-      await updateWebResource(
+      await Container.get(DynamicsDataProvider).updateWebResource(
         org,
         item.meta?.webresourceid || "",
         new TextDecoder().decode(content)
